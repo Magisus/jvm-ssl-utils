@@ -279,3 +279,36 @@
         crls-filename "crl-chain-with-cert-revoked.pem"
         [certs crls] (generate-cert-chain-with-revoked-cert number-of-certs)]
     (write-certs-and-crls certs crls test-subpath certs-filename crls-filename)))
+
+(defn matching-3-parts-chains
+  []
+  (let [dir-path (fs/file test-files-path "three_part")
+        root-key-pair (generate-key-pair 2048)
+        [root-cert _] (generate-ca-cert (cn "Root CA") root-key-pair 1 true)
+        root-crl (generate-crl (.getSubjectX500Principal ^X509Certificate root-cert)
+                               (get-private-key root-key-pair)
+                               (get-public-key root-key-pair))
+        newer-root-crl (generate-newer-crl (.getSubjectX500Principal ^X509Certificate root-cert)
+                                           (get-private-key root-key-pair)
+                                           (get-public-key root-key-pair))
+        [int-cert int-key-pair] (generate-ca-cert (cn "Root CA")
+                                                  root-key-pair 2 false)
+        int-crl (generate-crl (.getSubjectX500Principal ^X509Certificate int-cert)
+                              (get-private-key int-key-pair)
+                              (get-public-key int-key-pair))
+        newer-int-crl (generate-newer-crl (.getSubjectX500Principal ^X509Certificate int-cert)
+                                          (get-private-key int-key-pair)
+                                          (get-public-key int-key-pair))
+        [leaf-cert leaf-key-pair] (generate-ca-cert (cn "Intermediate CA 2")
+                                                    int-key-pair 3 false)
+        leaf-crl (generate-crl (.getSubjectX500Principal ^X509Certificate leaf-cert)
+                               (get-private-key leaf-key-pair)
+                               (get-public-key leaf-key-pair))
+        newer-leaf-crl (generate-newer-crl (.getSubjectX500Principal ^X509Certificate leaf-cert)
+                                           (get-private-key leaf-key-pair)
+                                           (get-public-key leaf-key-pair))]
+    (fs/mkdirs dir-path)
+    (obj->pem! leaf-key-pair (fs/file dir-path "leaf_key.pem"))
+    (objs->pem! [leaf-crl int-crl root-crl] (fs/file dir-path "three_crl.pem"))
+    (objs->pem! [leaf-cert int-cert root-cert] (fs/file dir-path "three_cert_chain.pem"))
+    (objs->pem! [newer-leaf-crl newer-int-crl newer-root-crl] (fs/file dir-path "three_newer_crl_chain.pem"))))
